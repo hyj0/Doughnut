@@ -4,23 +4,15 @@ import android.app.Dialog;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.ActivityNotFoundException;
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.SharedPreferences;
+import android.content.*;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.graphics.Color;
-import android.os.Build;
-import android.os.Handler;
-import android.os.IBinder;
-import android.os.Looper;
-import android.os.Vibrator;
+import android.os.*;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.util.Pair;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -28,12 +20,14 @@ import android.view.View.OnClickListener;
 import android.view.View.OnTouchListener;
 import android.view.WindowManager;
 import android.widget.ImageButton;
-
+import android.widget.Toast;
 import com.way.arclayout.ArcLayout;
 import com.way.doughnut.activity.SettingsActivity;
 import com.way.doughnut.fragment.SettingsFragment;
-import com.way.doughnut.util.MyLog;
-import com.way.doughnut.util.Utils;
+import com.way.doughnut.util.*;
+
+import java.io.*;
+import java.util.ArrayList;
 
 public class MainService extends Service
         implements OnClickListener, DoughtnutImageView.Callbacks, OnSharedPreferenceChangeListener {
@@ -74,6 +68,14 @@ public class MainService extends Service
         mWindowManager.getDefaultDisplay().getMetrics(mMetrics);
         addFloatView();
         mPreferences.registerOnSharedPreferenceChangeListener(this);
+        String daemserv = "daemserv";
+        try {
+            PlayState.runDaemServer(getApplicationContext(), getResources().getAssets().open(daemserv));
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void addFloatView() {
@@ -150,17 +152,119 @@ public class MainService extends Service
         return builder.build();
     }
 
+    final Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case 1:
+                    Toast.makeText(MainService.this, "get permission... wait a monent ", Toast.LENGTH_SHORT).show();
+                    break;
+                case 2:
+                    Toast.makeText(MainService.this, "read server err ...", Toast.LENGTH_SHORT).show();
+                    break;
+                case 3:
+                    Toast.makeText(MainService.this, "start play ...", Toast.LENGTH_SHORT).show();
+            }
+            super.handleMessage(msg);
+        }
+    };
+
     @Override
     public void onSwipeToDirection(int direction) {
 
         switch (direction) {
             case DoughtnutImageView.SWIPE_TO_TOP:
-                mVibrator.vibrate(
-                        mPreferences.getInt(SettingsFragment.KEY_VIBRATOR_LEVEL, SettingsFragment.DEFAULT_VIBRATE_LEVEL));
-                if (mFloatingView != null) {
-                    mFloatingView.scaleToDimiss(true);
+                //                        mVibrator.vibrate(
+//                                mPreferences.getInt(SettingsFragment.KEY_VIBRATOR_LEVEL, SettingsFragment.DEFAULT_VIBRATE_LEVEL));
+//                        if (mFloatingView != null) {
+//                            mFloatingView.scaleToDimiss(true);
+//                        }
+//                        startForeground(NOTIFICATION_ID, createNotification());
+
+                int playState = PlayState.getState();
+                if (playState > 0) {
+                    Toast.makeText(MainService.this, "正在运行...", Toast.LENGTH_SHORT).show();
+                    break;
                 }
-                startForeground(NOTIFICATION_ID, createNotification());
+
+                String daemserv = "daemserv";
+                try {
+                    PlayState.runDaemServer(getApplicationContext(), getResources().getAssets().open(daemserv));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                PlayState.setState(1);
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        MyLog.d(TAG, "cap Screen");
+                        new File(Environment.getExternalStorageDirectory()+"/mmm.png").delete();
+                        if (!ScreenShotUtils.capScreen1()) {
+                            Message msg = new Message();
+                            msg.what = 1;
+                            handler.sendMessage(msg);
+                            PlayState.setState(0);
+                            return;
+                        }
+
+                        try {
+                            MyLog.d(TAG, "upload image");
+                            HttpPostfile httpPostfile = new HttpPostfile();
+                            String serverHost = "192.168.3.112:8081";
+                            File server = new File(Environment.getExternalStorageDirectory() + "/popstar_autoplay_url.txt");
+                            if (server.exists()) {
+                                BufferedReader bufferedReader = new BufferedReader(new FileReader(server));
+                                String line = bufferedReader.readLine();
+                                line = line.trim();
+                                if (line.length() > 0) {
+                                    serverHost = line;
+                                }
+                            }
+                            String res = httpPostfile.post(String.format("http://%s/play_game", serverHost),
+                                    Environment.getExternalStorageDirectory()+"/mmm.png");
+                            if (res.length() == 0) {
+                                Message msg = new Message();
+                                msg.what = 2;
+                                handler.sendMessage(msg);
+                            }
+
+                            MyLog.d(TAG, "start click");
+
+                            Message msg = new Message();
+                            msg.what = 3;
+                            handler.sendMessage(msg);
+
+                            ArrayList<Pair> stepLst = httpPostfile.parseSteps(res);
+                            InputMonit inputMonit = new InputMonit();
+                            for (Pair xy :
+                                    stepLst) {
+                                int x = (int) xy.first;
+                                int y = (int) xy.second;
+                                //需要多次点击
+                                inputMonit.click(x, y);
+                                Thread.sleep(100);
+                                inputMonit.click(x, y);
+                                inputMonit.click(x, y);
+                                inputMonit.click1(x, y);
+
+                                Thread.sleep(3000);
+                            }
+
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        //end play
+                        PlayState.setState(0);
+                    }
+                }).start();
+
                 break;
             case DoughtnutImageView.SWIPE_TO_BOTTOM:
                 mVibrator.vibrate(
