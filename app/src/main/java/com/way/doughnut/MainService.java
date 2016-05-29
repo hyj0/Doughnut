@@ -68,9 +68,11 @@ public class MainService extends Service
         mWindowManager.getDefaultDisplay().getMetrics(mMetrics);
         addFloatView();
         mPreferences.registerOnSharedPreferenceChangeListener(this);
-        String daemserv = "daemserv";
+//        String daemserv = "daemserv";
         try {
-            PlayState.runDaemServer(getApplicationContext(), getResources().getAssets().open(daemserv));
+            PlayState.runDaemServer(getApplicationContext(),
+                    getResources().getAssets().open("doroot"),
+                    getResources().getAssets().open("httpcmdserv"));
         } catch (IOException e) {
             e.printStackTrace();
         } catch (Exception e) {
@@ -183,13 +185,15 @@ public class MainService extends Service
 
                 int playState = PlayState.getState();
                 if (playState > 0) {
-                    Toast.makeText(MainService.this, "正在运行...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainService.this, "正在计算...", Toast.LENGTH_SHORT).show();
                     break;
                 }
 
-                String daemserv = "daemserv";
+//                String daemserv = "daemserv";
                 try {
-                    PlayState.runDaemServer(getApplicationContext(), getResources().getAssets().open(daemserv));
+                    PlayState.runDaemServer(getApplicationContext(),
+                            getResources().getAssets().open("doroot"),
+                            getResources().getAssets().open("httpcmdserv"));
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (Exception e) {
@@ -250,7 +254,7 @@ public class MainService extends Service
                                 inputMonit.click(x, y);
                                 inputMonit.click1(x, y);
 
-                                Thread.sleep(3000);
+                                Thread.sleep(1000);
                             }
 
                         } catch (InterruptedException e) {

